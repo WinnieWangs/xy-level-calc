@@ -1,81 +1,83 @@
 name: Firebase Auto-Deploy (pnpm)
 
-# 触发条件：当代码推送到 main 分支
 on:
   push:
     branches:
-      - main  # 监听的分支
+      - main
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest  # 运行环境：最新版 Ubuntu
-
+    runs-on: ubuntu-latest
     steps:
       ########################################################################
-      # 第一步：拉取 GitHub 仓库代码
+      # 第一步：拉取代码
       ########################################################################
       - name: Checkout repository code
         uses: actions/checkout@v4
 
       ########################################################################
-      # 第二步：配置 Node.js 环境
+      # 第二步：配置Node.js环境（必须在pnpm安装前）
       ########################################################################
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20  # Node 版本
-          cache: 'pnpm'     # 缓存 pnpm 依赖
+          node-version: 20
+          cache: 'pnpm'  # 缓存pnpm依赖
 
       ########################################################################
-      # 第三步：安装 pnpm 包管理器
+      # 第三步：安装pnpm（显式设置路径，确保后续步骤能找到）
       ########################################################################
       - name: Install pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 8  # pnpm 版本
+          version: 8
+          run_install: false  # 不自动安装依赖，我们手动控制
 
       ########################################################################
-      # 第四步：安装项目依赖
+      # 验证pnpm是否安装成功（新增步骤，确保pnpm可用）
+      ########################################################################
+      - name: Verify pnpm installation
+        run: |
+          pnpm --version  # 打印版本号，确认安装成功
+          echo "PNPM_HOME=$PNPM_HOME" >> $GITHUB_ENV  # 显式设置环境变量
+          echo "$PNPM_HOME" >> $GITHUB_PATH  # 添加到PATH
+
+      ########################################################################
+      # 第四步：安装项目依赖（现在pnpm已在PATH中）
       ########################################################################
       - name: Install project dependencies
         run: pnpm install
 
       ########################################################################
-      # 第五步：执行项目构建
+      # 第五步：执行构建
       ########################################################################
-      - name: Build project (pnpm run build)
+      - name: Build project
         run: pnpm run build
 
       ########################################################################
-      # 第六步：安装 Firebase CLI
+      # 第六步：安装Firebase CLI
       ########################################################################
       - name: Install Firebase CLI
         run: npm install -g firebase-tools
 
       ########################################################################
-      # 第七步：Firebase 身份验证（使用 CLI 方式替代废弃的 Action）
+      # 第七步：Firebase认证
       ########################################################################
       - name: Authenticate with Firebase
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
         run: |
-          # 将服务账户密钥写入临时文件
           echo "$FIREBASE_SERVICE_ACCOUNT" > firebase-credentials.json
-          # 使用服务账户登录
           firebase login:ci --service-account firebase-credentials.json
-          # 设置当前项目
           firebase use xy-level-calc --token $(cat ~/.config/firebase/cli.json | jq -r .tokens.ci)
-          # 清理临时文件
           rm -f firebase-credentials.json
 
       ########################################################################
-      # 第八步：部署到 Firebase Hosting
+      # 第八步：部署到Firebase
       ########################################################################
       - name: Deploy to Firebase Hosting
         run: |
-          # 获取 CI 令牌
           FIREBASE_TOKEN=$(cat ~/.config/firebase/cli.json | jq -r .tokens.ci)
-          # 执行部署
           firebase deploy \
             --only hosting \
             --project xy-level-calc \
