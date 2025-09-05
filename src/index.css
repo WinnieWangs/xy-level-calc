@@ -1,0 +1,32 @@
+/* 引入Font Awesome */
+@import url("https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css");
+
+/* 引入Tailwind CSS */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 自定义工具类 */
+@layer utilities {
+  .content-auto {
+    content-visibility: auto;
+  }
+  .card-shadow {
+    box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.1), 0 8px 10px -6px rgba(99, 102, 241, 0.1);
+  }
+  .input-focus {
+    @apply focus:ring-2 focus:ring-primary/50 focus:border-primary focus:outline-none;
+  }
+  .btn-hover {
+    @apply hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300;
+  }
+}
+
+/* 基础样式 */
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply font-sans;
+}
