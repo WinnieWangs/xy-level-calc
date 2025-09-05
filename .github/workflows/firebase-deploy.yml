@@ -1,78 +1,84 @@
-# .github/workflows/firebase-deploy.yml
 name: Firebase Auto-Deploy (pnpm)
 
-# 触发条件：当代码推送到 main 分支（可根据需求修改分支名，如 dev/test）
+# 触发条件：当代码推送到 main 分支
 on:
   push:
     branches:
-      - main  # 监听的分支，建议生产环境用 main，测试环境用 dev
+      - main  # 监听的分支
 
 jobs:
   build-and-deploy:
-    # 运行环境：最新版 Ubuntu（兼容性好，速度快）
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest  # 运行环境：最新版 Ubuntu
 
     steps:
       ########################################################################
       # 第一步：拉取 GitHub 仓库代码
       ########################################################################
       - name: Checkout repository code
-        uses: actions/checkout@v4  # 官方动作，拉取当前分支代码
+        uses: actions/checkout@v4
 
       ########################################################################
-      # 第二步：配置 Node.js 环境（pnpm 依赖 Node.js）
+      # 第二步：配置 Node.js 环境
       ########################################################################
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20  # 选择与本地开发一致的 Node 版本（建议 18+）
-          cache: 'pnpm'     # 缓存 pnpm 依赖，加速后续构建（关键优化）
+          node-version: 20  # Node 版本
+          cache: 'pnpm'     # 缓存 pnpm 依赖
 
       ########################################################################
-      # 第三步：安装 pnpm 包管理器（Ubuntu 默认没有 pnpm，需手动安装）
+      # 第三步：安装 pnpm 包管理器
       ########################################################################
       - name: Install pnpm
-        uses: pnpm/action-setup@v3  # pnpm 官方动作，确保版本一致
+        uses: pnpm/action-setup@v3
         with:
-          version: 8  # 选择稳定的 pnpm 版本（与本地使用的版本匹配）
+          version: 8  # pnpm 版本
 
       ########################################################################
-      # 第四步：安装项目依赖（基于 package.json）
+      # 第四步：安装项目依赖
       ########################################################################
       - name: Install project dependencies
-        run: pnpm install  # 替代 npm install，使用 pnpm 安装依赖
+        run: pnpm install
 
       ########################################################################
-      # 第五步：执行项目构建（pnpm run build）
+      # 第五步：执行项目构建
       ########################################################################
       - name: Build project (pnpm run build)
-        run: pnpm run build  # 执行你的构建命令，生成生产环境文件
-       
+        run: pnpm run build
 
       ########################################################################
-      # 第六步： Firebase 身份验证（通过服务账户密钥，安全无交互）
+      # 第六步：安装 Firebase CLI
+      ########################################################################
+      - name: Install Firebase CLI
+        run: npm install -g firebase-tools
+
+      ########################################################################
+      # 第七步：Firebase 身份验证（使用 CLI 方式替代废弃的 Action）
       ########################################################################
       - name: Authenticate with Firebase
-        uses: FirebaseExtended/action-firebase-login@v3  # Firebase 官方登录动作
-        with:
-          # 引用 GitHub Secrets 中存储的 Firebase 服务账户密钥
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
-          # （重要）替换为你的 Firebase 项目 ID（在 Firebase 控制台 → 项目设置 中查看）
-          projectId: xy-level-calc
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+        run: |
+          # 将服务账户密钥写入临时文件
+          echo "$FIREBASE_SERVICE_ACCOUNT" > firebase-credentials.json
+          # 使用服务账户登录
+          firebase login:ci --service-account firebase-credentials.json
+          # 设置当前项目
+          firebase use xy-level-calc --token $(cat ~/.config/firebase/cli.json | jq -r .tokens.ci)
+          # 清理临时文件
+          rm -f firebase-credentials.json
 
       ########################################################################
-      # 第七步：部署构建后的文件到 Firebase Hosting
+      # 第八步：部署到 Firebase Hosting
       ########################################################################
       - name: Deploy to Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0  # Firebase 官方部署动作
-        with:
-          # （关键）指定构建后的输出目录（根据你的项目实际目录修改！）
-          # 常见框架目录：Vue/Vite 是 dist，React 是 build，需与本地构建结果一致
-          folder: dist  # 🔔 请确认你的构建输出目录，若为 build 则改为 folder: build
-          # 部署目标（默认部署到 "live" 环境，即生产环境）
-          channelId: live
-          # 自动清理旧版本（可选，保持存储整洁）
-          cleanup: true
-        env:
-          # 自动使用上一步的登录身份，无需额外配置
-          FIREBASE_CLI_PREVIEWS: hostingchannels  # 启用 Hosting 渠道功能
+        run: |
+          # 获取 CI 令牌
+          FIREBASE_TOKEN=$(cat ~/.config/firebase/cli.json | jq -r .tokens.ci)
+          # 执行部署
+          firebase deploy \
+            --only hosting \
+            --project xy-level-calc \
+            --public dist \
+            --non-interactive \
+            --token $FIREBASE_TOKEN
